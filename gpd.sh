@@ -20,6 +20,9 @@ if [[ -z "${ENVIRONMENT}" ]] || ! [[ "${VALID_ENVIRONMENTS[@]}" =~ "${ENVIRONMEN
 	echo "[GPD][ERROR] please provide an environment"
 	echo "[GPD][ERROR] valid environments are \"${VALID_ENVIRONMENTS[@]}\""
 	exit 1
+elif [[ "${GENERATE}" == "true" ]] && ! [[ "${VALID_DEPLOYMENTS[@]}" =~ "${DEPLOY_TYPE}" ]]; then
+	echo "[GPD][ERROR] please provide a deployment type"
+	echo "[GPD][ERROR] valid deployments are \"${VALID_DEPLOYMENTS[@]}\""
 elif [[ "${DEPLOY}" == "true" ]] && ! [[ "${VALID_DEPLOYMENTS[@]}" =~ "${DEPLOY_TYPE}" ]]; then
 	echo "[GPD][ERROR] please provide a deployment type"
 	echo "[GPD][ERROR] valid deployments are \"${VALID_DEPLOYMENTS[@]}\""
