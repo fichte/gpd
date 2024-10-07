@@ -39,11 +39,10 @@ function copy_config_files()
 		awk -v item="${t}" '
 		$0 ~ "- path: "item".yml" {found=1}
 		found && $0 ~ "- path:" && $0 !~ item".yml" {found=0}
-		found {print}
+		found && $0 !~ "^networks:" {print}
+		/^networks:/ {found=0}
 		' "${SCRIPT_DIR}"/../docker/template/compose/stack.yml_template >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack.yml
 	done
-
-	echo "" >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack.yml
 
 	awk '/^networks:/,/^ *$/' "${SCRIPT_DIR}"/../docker/template/compose/stack.yml_template >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack.yml
 
