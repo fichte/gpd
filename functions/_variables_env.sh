@@ -94,6 +94,8 @@ function variables_env_replace()
 		echo "${STACK_VARIABLES_VAR}=__${STACK_VARIABLES_VAR}__" >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack.env
 		sed -i 's;__'${STACK_VARIABLES[$w]}'__;'"${!STACK_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/stack.env || return 1
 		sed -i 's;__'${STACK_VARIABLES[$w]}'__;'"${!STACK_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/stack.yml || return 1
+		sed -i 's;__'${STACK_VARIABLES[$w]}'__;'"${!STACK_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/stack-common.yml || return 1
+		sed -i 's;__'${STACK_VARIABLES[$w]}'__;'"${!STACK_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/stack-extend.yml || return 1
 		sed -i 's;__'${STACK_VARIABLES[$w]}'__;'"${!STACK_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/config/* || return 1
 	done
 

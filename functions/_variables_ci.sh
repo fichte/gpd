@@ -80,6 +80,8 @@ function variables_ci_replace()
 		echo "${STACK_CI_VARIABLES_VAR}=__${STACK_CI_VARIABLES_VAR}__" >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack.env
 		sed -i 's;__'${STACK_CI_VARIABLES[$c]}'__;'"${!STACK_CI_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/stack.env
 		sed -i 's;__'${STACK_CI_VARIABLES[$c]}'__;'"${!STACK_CI_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/stack.yml
+		sed -i 's;__'${STACK_CI_VARIABLES[$c]}'__;'"${!STACK_CI_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/stack-common.yml
+		sed -i 's;__'${STACK_CI_VARIABLES[$c]}'__;'"${!STACK_CI_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/stack-extend.yml
 		sed -i 's;__'${STACK_CI_VARIABLES[$c]}'__;'"${!STACK_CI_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/config/*
 	done
 }

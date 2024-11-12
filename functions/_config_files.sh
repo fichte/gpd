@@ -30,21 +30,12 @@ function copy_config_files()
 	for t in "${DEPLOY_SERVICE[@]}"; do
 		FINAL_CONFIG_FILE=$(echo "${t}".yml_template | sed -e 's/_template//g')
 		cp "${SCRIPT_DIR}"/../docker/template/compose/"${t}".yml_template "${STACK_FINAL_CONFIG_DIR}"/compose/"${FINAL_CONFIG_FILE}"
+
+		if [ -f "${SCRIPT_DIR}"/../docker/template/compose/"${t}"_extend.yml_template ]; then
+			FINAL_CONFIG_FILE=$(echo "${t}"_extend.yml_template | sed -e 's/_template//g')
+			cp "${SCRIPT_DIR}"/../docker/template/compose/"${t}"_extend.yml_template "${STACK_FINAL_CONFIG_DIR}"/compose/"${FINAL_CONFIG_FILE}"
+		fi
 	done
-
-	## create stack.yml
-	echo "include:" >"${STACK_FINAL_CONFIG_DIR}"/compose/stack.yml
-
-	for t in "${DEPLOY_SERVICE[@]}"; do
-		awk -v item="${t}" '
-		$0 ~ "- path: "item".yml" {found=1}
-		found && $0 ~ "- path:" && $0 !~ item".yml" {found=0}
-		found && $0 !~ "^networks:" {print}
-		/^networks:/ {found=0}
-		' "${SCRIPT_DIR}"/../docker/template/compose/stack.yml_template >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack.yml
-	done
-
-	awk '/^networks:/,/^ *$/' "${SCRIPT_DIR}"/../docker/template/compose/stack.yml_template >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack.yml
 
 	## create stack-common.yml
 	awk '/^services:/ {exit} {print}' "${SCRIPT_DIR}"/../docker/template/compose/stack-common.yml_template >"${STACK_FINAL_CONFIG_DIR}"/compose/stack-common.yml
@@ -60,10 +51,43 @@ function copy_config_files()
 		' "${SCRIPT_DIR}"/../docker/template/compose/stack-common.yml_template >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack-common.yml
 		echo "" >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack-common.yml
 	done
-	popd &>/dev/null
+
+	## create stack.yml
+	echo "include:" >"${STACK_FINAL_CONFIG_DIR}"/compose/stack.yml
+	echo "  - path:" >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack.yml
+
+	for t in "${DEPLOY_SERVICE[@]}"; do
+		if [ -f "${SCRIPT_DIR}"/../docker/template/compose/"${t}".yml_template ]; then
+			echo "    - ${t}.yml" >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack.yml
+		fi
+	done
+
+	echo "    env_file: ./stack.env" >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack.yml
+
+	# create exted array
+	DEPLOY_SERVICE_EXTEND=()
+	for t in "${DEPLOY_SERVICE[@]}"; do
+		if [ -f "${SCRIPT_DIR}"/../docker/template/compose/"${t}"_extend.yml_template ]; then
+			DEPLOY_SERVICE_EXTEND+=("${t}"_extend)
+		fi
+	done
+
+	if [ "${#DEPLOY_SERVICE_EXTEND[@]}" -gt 0 ]; then
+		echo "include:" >"${STACK_FINAL_CONFIG_DIR}"/compose/stack-extend.yml
+		echo "  - path:" >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack-extend.yml
+
+		for t in "${DEPLOY_SERVICE_EXTEND[@]}"; do
+			if [ -f "${SCRIPT_DIR}"/../docker/template/compose/"${t}".yml_template ]; then
+				echo "    - ${t}.yml" >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack-extend.yml
+			fi
+		done
+
+		echo "    env_file: ./stack.env" >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack-extend.yml
+	else
+		touch "${STACK_FINAL_CONFIG_DIR}"/compose/stack-extend.yml
+	fi
 
 	## initialize array of all final compose files
-	pushd "${STACK_FINAL_CONFIG_DIR}"/compose &>/dev/null
 	COMPOSE_FILES=(*)
 	popd &>/dev/null
 
@@ -78,10 +102,8 @@ function copy_config_files()
 			cp "${SCRIPT_DIR}"/../docker/template/config/"${CONFIG_FILES_TEMPLATES[$u]}" "${STACK_FINAL_CONFIG_DIR}"/config/"${FINAL_CONFIG_FILE}"
 		done
 	done
-	popd &>/dev/null
 
 	## initialize array of all final config files
-	pushd "${STACK_FINAL_CONFIG_DIR}"/config &>/dev/null
 	CONFIG_FILES=(*)
 	popd &>/dev/null
 }
