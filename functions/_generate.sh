@@ -1,5 +1,7 @@
 function generate()
 {
+	create_directories
+
 	if ! variables_env "${ENVIRONMENT}"; then
 		exit 1
 	fi
@@ -25,7 +27,6 @@ function generate()
 
 	echo "[GPD][GENERATE] starting config file generation"
 
-	create_directories
 	copy_config_files
 	variables_base_replace
 

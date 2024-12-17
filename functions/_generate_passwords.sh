@@ -31,7 +31,7 @@ function generate_opensearch_passwords()
 			OPENSEARCH_USER="${OPENSEARCH_USER%%_PASSWORD*}"
 			OPENSEARCH_USERS+=("$OPENSEARCH_USER")
 		fi
-	done < "${SCRIPT_DIR}/../docker/variables/mandatory"
+	done < "${STACK_FINAL_CONFIG_DIR}"/compose/variables
 
 	for i in "${OPENSEARCH_USERS[@]}"; do
 		ENVIRONMENT_PASSWORD_VARIABLE="${ENVIRONMENT^^}"_STACK_OPENSEARCH_"${i}"_PASSWORD

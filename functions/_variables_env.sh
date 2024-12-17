@@ -3,6 +3,27 @@ function variables_env()
 	local ENV="${1^^}"
 	local VAR_DIR="${SCRIPT_DIR}"/../../"${CI_PROJECT_NAME}".tmp
 
+	while IFS= read -r LINE; do
+	if [[ "${LINE}" == "${DEPLOY_TYPE}"=* ]]; then
+		DEPLOY_SERVICES="${LINE#*=}"
+		IFS=' ' read -r -a DEPLOY_SERVICE <<< "${DEPLOY_SERVICES}"
+	fi
+	done < "${SCRIPT_DIR}"/../docker/variables/deployments
+
+	## generate final mandatory variables file for selected deployment
+	cat "${SCRIPT_DIR}"/../docker/variables/mandatory > "${STACK_FINAL_CONFIG_DIR}"/compose/variables.tmp
+
+	pushd "${SCRIPT_DIR}"/../docker/template/variables &>/dev/null
+	for t in "${DEPLOY_SERVICE[@]}"; do
+		if [ -f "${SCRIPT_DIR}"/../docker/template/variables/"${t}"_template ]; then
+			cat "${SCRIPT_DIR}"/../docker/template/variables/"${t}"_template >> "${STACK_FINAL_CONFIG_DIR}"/compose/variables.tmp
+		fi
+	done
+
+	cat "${STACK_FINAL_CONFIG_DIR}"/compose/variables.tmp | sort | uniq > "${STACK_FINAL_CONFIG_DIR}"/compose/variables
+	rm -f "${STACK_FINAL_CONFIG_DIR}"/compose/variables.tmp
+	popd &>/dev/null
+
 	## check and load ci environment file
 	if [ ! -f "${ENV_CONFIG_DIR}"/"${ENV}"_STACK_ENVIRONMENT_VARIABLES ] && [ ! -f "${VAR_DIR}"/"${ENV}"_STACK_ENVIRONMENT_VARIABLES ]; then
 		echo "[GPD][ERROR] stack variables for environment ${ENVIRONMENT} do not exist"
@@ -55,7 +76,7 @@ function variables_env_check()
 		STACK_KEY="${STACK_KEY#"${STACK_KEY%%[![:space:]]*}"}"
 		STACK_KEY="${STACK_KEY%"${STACK_KEY##*[![:space:]]}"}"
 		STACK_VARIABLES+=("$STACK_KEY")
-	done < "${SCRIPT_DIR}"/../docker/variables/mandatory
+	done < "${STACK_FINAL_CONFIG_DIR}"/compose/variables
 
 	STACK_VARIABLES_LEN=$(( "${#STACK_VARIABLES[@]}" - 1 ))
 

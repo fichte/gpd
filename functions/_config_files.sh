@@ -1,12 +1,5 @@
 function copy_config_files()
 {
-        while IFS= read -r LINE; do
-        if [[ "${LINE}" == "${DEPLOY_TYPE}"=* ]]; then
-                DEPLOY_SERVICES="${LINE#*=}"
-                IFS=' ' read -r -a DEPLOY_SERVICE <<< "${DEPLOY_SERVICES}"
-        fi
-        done < "${SCRIPT_DIR}"/../docker/variables/deployments
-
 	## copy asset files for selected deployment
 	pushd "${SCRIPT_DIR}"/../docker/template/asset &>/dev/null
 	for t in "${DEPLOY_SERVICE[@]}"; do
