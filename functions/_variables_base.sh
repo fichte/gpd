@@ -38,10 +38,7 @@ function variables_base_replace()
 		STACK_BASE_VARIABLES_REPLACE_VAR=$(echo "${STACK_BASE_VARIABLES_KEY[$e]}")
 		echo "[GPD][GENERATE] replacing base variable ${STACK_BASE_VARIABLES_KEY[$e]}"
 		echo "${STACK_BASE_VARIABLES_KEY[$e]}=__${STACK_BASE_VARIABLES_KEY[$e]}__" >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack.env
-		sed -i 's;__'${STACK_BASE_VARIABLES_KEY[$e]}'__;'"${!STACK_BASE_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/stack.env
-		sed -i 's;__'${STACK_BASE_VARIABLES_KEY[$e]}'__;'"${!STACK_BASE_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/stack.yml
-		sed -i 's;__'${STACK_BASE_VARIABLES_KEY[$e]}'__;'"${!STACK_BASE_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/stack-common.yml
-		sed -i 's;__'${STACK_BASE_VARIABLES_KEY[$e]}'__;'"${!STACK_BASE_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/stack-extend.yml
+		sed -i 's;__'${STACK_BASE_VARIABLES_KEY[$e]}'__;'"${!STACK_BASE_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/*
 		sed -i 's;__'${STACK_BASE_VARIABLES_KEY[$e]}'__;'"${!STACK_BASE_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/config/*
 	done
 }
