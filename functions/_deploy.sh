@@ -65,10 +65,10 @@ function deploy_check_running()
 	if [ "${DEPLOY_FORCE}" == "true" ]; then
 		echo "[GPD][DEPLOY][WARNING] ignore check running of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[@]}"
 		return 0
-	elif [ "${ENVIRONMENT}" == "local" ] && [ ! $(docker compose --env-file "${DEPLOY_STACK_ENV_FILE}" ps --services --status running "${DEPLOY_SERVICE[@]}" | wc -l) -eq "${DEPLOY_SERVICE_LEN}" ]; then
+	elif [ "${ENVIRONMENT}" == "local" ] && [ ! $(docker compose --env-file "${DEPLOY_STACK_ENV_FILE}" ps --services --status running -q "${DEPLOY_SERVICE[@]}" | wc -l) -eq "${DEPLOY_SERVICE_LEN}" ]; then
 		echo "[GPD][DEPLOY][ERROR] not all services are running, preventing deployment of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[@]}"
 		return 1
-	elif [ "${ENVIRONMENT}" != "local" ] && [ ! $(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker compose --env-file '"${DEPLOY_STACK_ENV_FILE}"' ps --services --status running '"${DEPLOY_SERVICE_REMOTE}"' | wc -l') -eq "${DEPLOY_SERVICE_LEN}" ]; then
+	elif [ "${ENVIRONMENT}" != "local" ] && [ ! $(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker compose --env-file '"${DEPLOY_STACK_ENV_FILE}"' ps --services --status running -q '"${DEPLOY_SERVICE_REMOTE}"' | wc -l') -eq "${DEPLOY_SERVICE_LEN}" ]; then
 		echo "[GPD][DEPLOY][ERROR] not all services are running, preventing deployment of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[@]}"
 		return 1
 	fi
