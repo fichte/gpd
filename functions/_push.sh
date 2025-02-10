@@ -17,7 +17,7 @@ function push()
 		return 0
 	else
 		gpd rsync "${STACK_FINAL_CONFIG_DIR}" "${BASEDIR}"
-		if [ ! "${ENVIRONMENT}" == "local" ] && { [ ! -f "${SCRIPT_DIR}"/../docker/variables/side ] && [ ! -f "${SCRIPT_DIR}"/../docker/variables/main ]; }; then
+		if [[ ! "${ENVIRONMENT}" == local* ]] && { [ ! -f "${SCRIPT_DIR}"/../docker/variables/side ] && [ ! -f "${SCRIPT_DIR}"/../docker/variables/main ]; }; then
 			echo "[GPD][PUSH] creating symbolic link from ${BASEDIR}/${ENVIRONMENT}/.env to ~/.ssh/environment for user ${!STACK_DEPLOY_USER}"
 			gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'ln -sf '"${BASEDIR}"'/'"${ENVIRONMENT}"'/.env ~/.ssh/environment'
 		fi

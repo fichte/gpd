@@ -1,6 +1,6 @@
 function gpd()
 {
-	if [ "${ENVIRONMENT}" == "local" ]; then
+	if [[ "${ENVIRONMENT}" == local* ]]; then
 		RSYNC_OPTIONS_LOCAL="-avqz"
 	else
 		STACK_DEPLOY_HOST="${ENVIRONMENT^^}"_STACK_DEPLOY_HOST
@@ -53,7 +53,7 @@ function gpd()
 		local SRC_FILE=${1}
 		local DST_FILE=${2}
 
-		if [ ! "${ENVIRONMENT}" == "local" ]; then
+		if [[ ! "${ENVIRONMENT}" == local* ]]; then
 			local DST=$(scp_ipv6 ${!STACK_DEPLOY_HOST})
 			CMD=(rsync -azqe "${RSYNC_OPTIONS_REMOTE}" "${SRC_FILE}" "${!STACK_DEPLOY_USER}"@"${DST}":"${DST_FILE}")
 		else
@@ -72,7 +72,7 @@ function gpd()
 		local SRC_FILE=${1}
 		local DST_FILE=${2}
 
-		if [ ! "${ENVIRONMENT}" == "local" ]; then
+		if [[ ! "${ENVIRONMENT}" == local* ]]; then
 			local DST=$(scp_ipv6 ${!STACK_DEPLOY_HOST})
 			local TEMPFILE=$(mktemp)
 			ssh ${SSH_OPTIONS} "${!STACK_DEPLOY_USER}"@"${DST}" 'cat '"${DST_FILE}"'/'"${ENVIRONMENT}"'/.env' >"${TEMPFILE}"
