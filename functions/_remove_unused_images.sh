@@ -16,14 +16,14 @@ function remove_unused_images()
 
 	DEPLOY_STACK_ENV_FILE="${BASEDIR}"/"${ENVIRONMENT}"/.env
 
-	if [ "${ENVIRONMENT}" == "local" ] && [ $(docker image ls -q -f "dangling=true" | wc -l) -gt 0 ]; then
+	if [[ "${ENVIRONMENT}" == local* ]] && [ $(docker image ls -q -f "dangling=true" | wc -l) -gt 0 ]; then
 			echo "[GPD][CLEAN] cleaning dangling images"
 			if ! docker image rm $(docker image ls -q -f "dangling=true") &>/dev/null; then
 				echo "[GPD][CLEAN][ERROR] cleaning dangling images failed"
 			else
 				echo "[GPD][CLEAN] cleaning dangling images successful"
 			fi
-	elif [ "${ENVIRONMENT}" != "local" ] && [ $(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker image ls -q -f "dangling=true" | wc -l') -gt 0 ]; then
+	elif [[ "${ENVIRONMENT}" != local* ]] && [ $(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker image ls -q -f "dangling=true" | wc -l') -gt 0 ]; then
 			if ! gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker image rm $(docker image ls -q -f "dangling=true") &>/dev/null'; then
 				echo "[GPD][CLEAN][ERROR] cleaning dangling images failed"
 			else
@@ -33,7 +33,7 @@ function remove_unused_images()
 			echo "[GPD][CLEAN] no dangling images"
 	fi
 
-	if [ "${ENVIRONMENT}" == "local" ]; then
+	if [[ "${ENVIRONMENT}" == local* ]]; then
 		OUTPUT_COMPOSE=$(docker compose --env-file "${DEPLOY_STACK_ENV_FILE}" images | sed 1d)
 	else
 		OUTPUT_COMPOSE=$(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker compose --env-file '"${DEPLOY_STACK_ENV_FILE}"' images | sed 1d')
@@ -57,7 +57,7 @@ function remove_unused_images()
 
 	for i in `seq 0 "${IMAGE_COMPOSE_LEN}"`; do
 		echo "[GPD][INFO] keeping ${IMAGE_COMPOSE[$i]}:${VERSION_COMPOSE[$i]}"
-		if [ "${ENVIRONMENT}" == "local" ]; then
+		if [[ "${ENVIRONMENT}" == local* ]]; then
 			IMAGE_LS_OUTPUT_COMPOSE=($(docker image ls --format '{{.Repository}}:{{.Tag}}' ${IMAGE_COMPOSE[$i]} | sed '/'"${VERSION_COMPOSE[$i]}"'/d'))
 		else
 			IMAGE_LS_OUTPUT_COMPOSE=($(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker image ls --format '{{.Repository}}:{{.Tag}}' '"${IMAGE_COMPOSE[$i]}"' | sed '/"${VERSION_COMPOSE[$i]}"/d''))
@@ -69,14 +69,14 @@ function remove_unused_images()
 
 	for delete in "${IMAGE_DELETE_COMPOSE[@]}"; do
 		echo "[GPD][CLEAN] removing unused image ${delete}"
-		if [ "${ENVIRONMENT}" == "local"  ]; then
+		if [[ "${ENVIRONMENT}" == local* ]]; then
 			docker image rm "${delete}" &>/dev/null
 		else
 			gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker image rm '"${delete}"' &>/dev/null'
 		fi
 	done
 
-	if [ "${ENVIRONMENT}" == "local" ]; then
+	if [[ "${ENVIRONMENT}" == local* ]]; then
 		OUTPUT_CLI_KEEP_VERSION=$(docker compose --env-file "${DEPLOY_STACK_ENV_FILE}" images | grep "${CI_REGISTRY}/${CI_PROJECT_PATH}/" | awk '{ print $3 }' | head -1)
 		OUTPUT_CLI=$(docker images | grep "${CI_REGISTRY}/${CI_PROJECT_PATH}/" | sed '/'"${OUTPUT_CLI_KEEP_VERSION}"'/d')
 	else
@@ -101,7 +101,7 @@ function remove_unused_images()
 	IMAGE_CLI_DELETE=()
 
 	for i in `seq 0 "${IMAGE_CLI_LEN}"`; do
-		if [ "${ENVIRONMENT}" == "local" ]; then
+		if [[ "${ENVIRONMENT}" == local* ]]; then
 			IMAGE_LS_OUTPUT_CLI=($(docker image ls --format '{{.Repository}}:{{.Tag}}' ${IMAGE_CLI[$i]}:"${VERSION_CLI[$i]}" ))
 		else
 			IMAGE_LS_OUTPUT_CLI=($(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker image ls --format '{{.Repository}}:{{.Tag}}' '"${IMAGE_CLI[$i]}"':'"${VERSION_CLI[$i]}"''))
@@ -113,7 +113,7 @@ function remove_unused_images()
 
 	for delete in "${IMAGE_DELETE_CLI[@]}"; do
 		echo "[GPD][CLEAN] removing unused image ${delete}"
-		if [ "${ENVIRONMENT}" == "local"  ]; then
+		if [[ "${ENVIRONMENT}" == local* ]]; then
 			docker image rm "${delete}" &>/dev/null
 		else
 			gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker image rm '"${delete}"' &>/dev/null'

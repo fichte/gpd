@@ -31,10 +31,10 @@ function variables_env()
 	elif [ ! -f "${ENV_CONFIG_DIR}"/"${ENV}"_STACK_SECRETS ] && [ ! -f "${VAR_DIR}"/"${ENV}"_STACK_SECRETS ]; then
 		echo "[GPD][ERROR] stack secrets variables for environment ${ENVIRONMENT} do not exist"
 		return 1
-	elif [ ! -f "${ENV_CONFIG_DIR}"/"${ENV}"_STACK_DEPLOY_SSH_KEY ] && [ ! -f "${VAR_DIR}"/"${ENV}"_STACK_DEPLOY_SSH_KEY ] && [ ! "${ENVIRONMENT}" == "local" ]; then
+	elif [ ! -f "${ENV_CONFIG_DIR}"/"${ENV}"_STACK_DEPLOY_SSH_KEY ] && [ ! -f "${VAR_DIR}"/"${ENV}"_STACK_DEPLOY_SSH_KEY ] && [[ ! "${ENVIRONMENT}" == local* ]]; then
 		echo "[GPD][ERROR] stack deploy ssh key for environment ${ENVIRONMENT} does not exist"
 		return 1
-	elif [ ! -f "${ENV_CONFIG_DIR}"/"${ENV}"_STACK_DEPLOY_SSH_KNOWN_HOSTS ] && [ ! -f "${VAR_DIR}"/"${ENV}"_STACK_DEPLOY_SSH_KNOWN_HOSTS ] && [ ! "${ENVIRONMENT}" == "local" ]; then
+	elif [ ! -f "${ENV_CONFIG_DIR}"/"${ENV}"_STACK_DEPLOY_SSH_KNOWN_HOSTS ] && [ ! -f "${VAR_DIR}"/"${ENV}"_STACK_DEPLOY_SSH_KNOWN_HOSTS ] && [[ ! "${ENVIRONMENT}" == local* ]]; then
 		echo "[GPD][ERROR] stack deploy ssh known hosts file for environment ${ENVIRONMENT} does not exist"
 		return 1
 	else
