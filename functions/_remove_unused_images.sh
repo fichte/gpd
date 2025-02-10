@@ -76,6 +76,11 @@ function remove_unused_images()
 		fi
 	done
 
+	if [ -z "${CI_REGISTRY}" ] || [ "$CI_REGISTRY" == "null" ] ; then
+		echo "[GPD][CLEAN] no custom built images"
+		exit 0
+	fi
+
 	if [[ "${ENVIRONMENT}" == local* ]]; then
 		OUTPUT_CLI_KEEP_VERSION=$(docker compose --env-file "${DEPLOY_STACK_ENV_FILE}" images | grep "${CI_REGISTRY}/${CI_PROJECT_PATH}/" | awk '{ print $3 }' | head -1)
 		OUTPUT_CLI=$(docker images | grep "${CI_REGISTRY}/${CI_PROJECT_PATH}/" | sed '/'"${OUTPUT_CLI_KEEP_VERSION}"'/d')

@@ -93,9 +93,15 @@ function deploy_login_to_registry()
 		exit 1
 	fi
 
-	if [[ "${ENVIRONMENT}" == local* ]] && ! $(docker login -u "${CI_REGISTRY_USER}" -p "${CI_REGISTRY_PASSWORD}" "${CI_REGISTRY}" &>/dev/null); then
+	if [[ "${ENVIRONMENT}" == local* ]] && [[ "${CI_REGISTRY}" == "null" ]] && [[ "${CI_REGISTRY_USER}" == "null" ]] && [[ "${CI_REGISTRY_USER}" == "null" ]]; then
+		echo "[GPD][DEPLOY] no registry defined, assuming all images in public registries"
+		return 0
+	elif [[ "${ENVIRONMENT}" == local* ]] && ! $(docker login -u "${CI_REGISTRY_USER}" -p "${CI_REGISTRY_PASSWORD}" "${CI_REGISTRY}" &>/dev/null); then
 		echo "[GPD][DEPLOY][ERROR] login to registry failed"
 		return 1
+	elif [[ "${ENVIRONMENT}" != local* ]] && [[ "${CI_REGISTRY}" == "null" ]] && [[ "${CI_REGISTRY_USER}" == "null" ]] && [[ "${CI_REGISTRY_USER}" == "null" ]]; then
+		echo "[GPD][DEPLOY] no registry defined, assuming all images in public registries"
+		return 0
 	elif [[ "${ENVIRONMENT}" != local* ]] && ! gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker login -u '"${CI_REGISTRY_USER}"' -p '"${CI_REGISTRY_PASSWORD}"' '"${CI_REGISTRY}"' &>/dev/null'; then
 		echo "[GPD][DEPLOY][ERROR] login to registry failed"
 		return 1
