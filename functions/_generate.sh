@@ -50,7 +50,7 @@ function generate()
 		fi
 	fi
 
-	if [ -f "${STACK_FINAL_CONFIG_DIR}"/compose/nginx.yml ]; then
+	if [ -f "${STACK_FINAL_CONFIG_DIR}"/compose/nginx.yml ] && [ "${GEOIP_DISABLE}" != "true" ]; then
 		if ! generate_geoip; then
 			exit 1
 		fi

@@ -21,11 +21,12 @@ Options :
   -c, --clean                    clean generated files
   -l, --docker-login             login to registry
   -k, --docker-logout            logout from registry
+  -o, --geoip-disable            disable geoip database download and generation
 EOF
 	return 0
 }
 
-if ! options=$(getopt -o hb:e:gpdt:fuclk -l help,basedir:,environmaent:,generate,push,deploy,deploy-type:,force,unused,clean,docker-login,docker-logout -- "$@"); then
+if ! options=$(getopt -o hb:e:gpdt:fuclko -l help,basedir:,environment:,generate,push,deploy,deploy-type:,force,unused,clean,docker-login,docker-logout,geoip-disable -- "$@"); then
 	usage "$@"
 	exit 1
 fi
@@ -46,6 +47,7 @@ do
 		-c|--clean)			CLEAN="true"; shift 1;;
 		-l|--docker-login)		LOGIN_DOCKER="true"; shift 1;;
 		-k|--docker-logout)		LOGOUT_DOCKER="true"; shift 1;;
+		-o|--geoip-disable)		GEOIP_DISABLE="true"; shift 1;;
 		*)				break ;;
 	esac
 done
