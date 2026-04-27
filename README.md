@@ -165,7 +165,7 @@ from `<ENV>_STACK_OPENSEARCH_<USER>_PASSWORD`.
 | `-u` | `--unused`       | prune dangling/old images on the target |
 | `-c` | `--clean`        | remove the generated tree before re-generating |
 | `-o` | `--geoip-disable`| skip the GeoIP database download and nginx allow-list |
-| `-r` | `--retries=<N>`  | attempts for flaky-network ops (rsync push, registry login, image pull, GeoIP download); default 3, must be ≥ 1. Backoff between attempts is exponential (1s, 2s, 4s, …). |
+| `-r` | `--retries=<N>`  | attempts for flaky-network ops (rsync push, registry login, image pull, registry logout, GeoIP download); default 3, must be ≥ 1. Backoff between attempts is exponential (1s, 2s, 4s, …). |
 
 Combined invocations are common:
 

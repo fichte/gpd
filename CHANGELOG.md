@@ -5,6 +5,12 @@ on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- `functions/_deploy.sh` (`deploy_logout_from_registry`): joins the
+  retry'd flaky-network operations. `docker logout` now retries up to
+  `--retries` times with exponential backoff, same wrapper as login,
+  pull, push, and GeoIP download.
+
 ## [1.0.1] - 2026-04-27
 
 ### Fixed
