@@ -1,0 +1,7 @@
+CI_REGISTRY=registry.example.com
+CI_REGISTRY_USER=ci-user
+CI_REGISTRY_PASSWORD=ci-pass
+CI_PROJECT_PATH=test/parent-stack
+CI_PROJECT_NAME=parent-stack
+CI_COMMIT_REF_NAME=test-branch
+CI_COMMIT_SHORT_SHA=abc12345

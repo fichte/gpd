@@ -1,0 +1,3 @@
+greeting = __STACK_GREETING__
+gnarly = __STACK_GNARLY_VALUE__
+env = __STACK_ENV__

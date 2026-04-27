@@ -4,9 +4,9 @@ function usage()
 generic deploy script for docker stacks
 
   ## generate files for deployment:
-  gpd.sh -b /srv/docker -e stage -g
+  gpd.sh -b /srv/docker -e stage -t full -g
 
-Usage: "${1}" -h|--help [-b|--basedir=<basedir>] [-e|--env=<environment>] [-g|--generate] [-p|--push] [-d|--deploy] [-t|--deploy-type] [-f|--force] [-c|--clean] [-l|--docker-login] [-k|--docker-logout]
+Usage: "${1}" -h|--help [-b|--basedir=<basedir>] [-e|--env=<environment>] [-g|--generate] [-p|--push] [-d|--deploy] [-t|--deploy-type] [-f|--force] [-c|--clean] [-u|--unused] [-o|--geoip-disable] [-r|--retries=<N>]
 
 Options :
   -h, --help                     print this help text
@@ -15,18 +15,17 @@ Options :
   -g, --generate                 generate config files for deployment
   -p, --push                     push config files for deployment to target
   -d, --deploy                   deploy in target
-  -t, --deploy-type=<DEPLOY_TYPE select deploy type (e.g. full, backend, frontend)
+  -t, --deploy-type=<DEPLOY_TYPE> select deploy type (e.g. full, backend, frontend)
   -f, --force                    force deployment
   -u, --unused                   remove unused images
   -c, --clean                    clean generated files
-  -l, --docker-login             login to registry
-  -k, --docker-logout            logout from registry
   -o, --geoip-disable            disable geoip database download and generation
+  -r, --retries=<N>              attempts for flaky-network operations (rsync push, registry login, image pull, geoip download); default 3
 EOF
 	return 0
 }
 
-if ! options=$(getopt -o hb:e:gpdt:fuclko -l help,basedir:,environment:,generate,push,deploy,deploy-type:,force,unused,clean,docker-login,docker-logout,geoip-disable -- "$@"); then
+if ! options=$(getopt -o hb:e:gpdt:fucor: -l help,basedir:,environment:,generate,push,deploy,deploy-type:,force,unused,clean,geoip-disable,retries: -- "$@"); then
 	usage "$@"
 	exit 1
 fi
@@ -45,9 +44,8 @@ do
 		-f|--force)			DEPLOY_FORCE="true"; shift 1;;
 		-u|--unused)			UNUSED="true"; shift 1;;
 		-c|--clean)			CLEAN="true"; shift 1;;
-		-l|--docker-login)		LOGIN_DOCKER="true"; shift 1;;
-		-k|--docker-logout)		LOGOUT_DOCKER="true"; shift 1;;
 		-o|--geoip-disable)		GEOIP_DISABLE="true"; shift 1;;
+		-r|--retries)			RETRIES="${2}"; shift 2;;
 		*)				break ;;
 	esac
 done

@@ -108,13 +108,12 @@ function variables_env_check()
 function variables_env_replace()
 {
 	## replace with values from gitlabci webstats project settings
-	for w in `seq 0 "${STACK_VARIABLES_LEN}"`; do
-		STACK_VARIABLES_VAR=$(echo "${STACK_VARIABLES[$w]}")
-		STACK_VARIABLES_REPLACE_VAR=$(echo "${ENVIRONMENT^^}"_"${STACK_VARIABLES[$w]}")
-		echo "[GPD][GENERATE] replacing environment variable ${STACK_VARIABLES_REPLACE_VAR}"
-		echo "${STACK_VARIABLES_VAR}=__${STACK_VARIABLES_VAR}__" >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack.env
-		sed -i 's;__'${STACK_VARIABLES[$w]}'__;'"${!STACK_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/* || return 1
-		sed -i 's;__'${STACK_VARIABLES[$w]}'__;'"${!STACK_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/config/* || return 1
+	local KEY ENV_KEY
+	for KEY in "${STACK_VARIABLES[@]}"; do
+		ENV_KEY="${ENVIRONMENT^^}_${KEY}"
+		echo "[GPD][GENERATE] replacing environment variable ${ENV_KEY}"
+		echo "${KEY}=__${KEY}__" >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack.env
+		safe_replace_token "${KEY}" "${!ENV_KEY}" "${STACK_FINAL_CONFIG_DIR}"/compose/* "${STACK_FINAL_CONFIG_DIR}"/config/* || return 1
 	done
 
 	## add nginx server names to issue variable
@@ -130,8 +129,8 @@ function variables_env_replace()
 
 		STACK_ACME_NAMES_ACME=( "${STACK_ACME_NAMES[@]/#/-d }" )
 
-		echo "[GPD][GENERATE] rsa issue command: ${!STACK_ACME_ISSUE_OPTIONS_RSA} ${STACK_ACME_NAMES_ACME[@]}"
-		echo "[GPD][GENERATE] ecc issue command: ${!STACK_ACME_ISSUE_OPTIONS_ECC} ${STACK_ACME_NAMES_ACME[@]}"
+		echo "[GPD][GENERATE] rsa issue command: ${!STACK_ACME_ISSUE_OPTIONS_RSA} ${STACK_ACME_NAMES_ACME[*]}"
+		echo "[GPD][GENERATE] ecc issue command: ${!STACK_ACME_ISSUE_OPTIONS_ECC} ${STACK_ACME_NAMES_ACME[*]}"
 	else
 		echo "[GPD][GENERATE] rsa issue command: ${!STACK_ACME_ISSUE_OPTIONS_RSA}"
 		echo "[GPD][GENERATE] ecc issue command: ${!STACK_ACME_ISSUE_OPTIONS_ECC}"

@@ -4,21 +4,19 @@ function generate_geoip()
 	## github: https://github.com/truongnhan0311/geolite2legacy
 	## updated databases: https://mailfud.org/geoip-legacy
 	echo "[GPD][GENERATE] starting download of geoip databases"
-	if ! wget -q -O "${STACK_FINAL_CONFIG_DIR}"/asset/nginx_geoipv4.dat.gz https://mailfud.org/geoip-legacy/GeoIPCity.dat.gz; then
-		echo "[GPD][ERROR] download of geoip ipv4 database failed"
+	if ! gpd_retry "${RETRIES}" gpd_http_get "https://mailfud.org/geoip-legacy/GeoIPCity.dat.gz" "${STACK_FINAL_CONFIG_DIR}"/asset/nginx_geoipv4.dat.gz; then
+		echo "[GPD][ERROR] download of geoip ipv4 database failed after ${RETRIES} attempts"
 		exit 1
-	else
-		gunzip "${STACK_FINAL_CONFIG_DIR}"/asset/nginx_geoipv4.dat.gz
-		echo "[GPD][GENERATE] download of geoip ipv4 database successful"
 	fi
+	gunzip "${STACK_FINAL_CONFIG_DIR}"/asset/nginx_geoipv4.dat.gz
+	echo "[GPD][GENERATE] download of geoip ipv4 database successful"
 
-	if ! wget -q -O "${STACK_FINAL_CONFIG_DIR}"/asset/nginx_geoipv6.dat.gz https://mailfud.org/geoip-legacy/GeoIPv6.dat.gz; then
-		echo "[GPD][ERROR] download of geoip ipv6 database failed"
+	if ! gpd_retry "${RETRIES}" gpd_http_get "https://mailfud.org/geoip-legacy/GeoIPv6.dat.gz" "${STACK_FINAL_CONFIG_DIR}"/asset/nginx_geoipv6.dat.gz; then
+		echo "[GPD][ERROR] download of geoip ipv6 database failed after ${RETRIES} attempts"
 		exit 1
-	else
-		gunzip "${STACK_FINAL_CONFIG_DIR}"/asset/nginx_geoipv6.dat.gz
-		echo "[GPD][GENERATE] download of geoip ipv6 database successful"
 	fi
+	gunzip "${STACK_FINAL_CONFIG_DIR}"/asset/nginx_geoipv6.dat.gz
+	echo "[GPD][GENERATE] download of geoip ipv6 database successful"
 
 	## generate allowed countries map
 	if [[ -z "${STACK_ALLOWED_COUNTRIES}" ]]; then
