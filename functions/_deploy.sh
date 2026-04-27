@@ -179,8 +179,8 @@ function deploy_logout_from_registry()
 		return 0
 	fi
 
-	if ! run_in_target docker logout "${CI_REGISTRY}" >/dev/null 2>&1; then
-		echo "[GPD][DEPLOY][ERROR] logout from registry failed"
+	if ! gpd_retry "${RETRIES}" gpd_silent run_in_target docker logout "${CI_REGISTRY}"; then
+		echo "[GPD][DEPLOY][ERROR] logout from registry failed after ${RETRIES} attempts"
 		return 1
 	fi
 
