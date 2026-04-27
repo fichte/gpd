@@ -5,6 +5,8 @@ on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-04-27
+
 ### Added
 - `functions/_substitute.sh` (`safe_replace_token`) — perl-based placeholder
   substitution that treats values as opaque strings. Replaces `sed -i 's;__VAR__;…;g'`
@@ -60,3 +62,6 @@ on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `_usage.sh`: `-l/--docker-login` and `-k/--docker-logout` flags. They were
   parsed but never read — login/logout already happen inline in
   `_deploy.sh`.
+
+[Unreleased]: https://github.com/fichte/gpd/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/fichte/gpd/releases/tag/v1.0.0
