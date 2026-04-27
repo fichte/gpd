@@ -1,3 +1,32 @@
+# run_in_target CMD [ARG...]
+#
+# Run CMD locally for local* environments, or via `gpd ssh` to the remote
+# deploy host otherwise. Stdout/stderr/exit-status pass through unchanged.
+# Args are shell-quoted with `printf %q` before being assembled into the SSH
+# payload, so values with spaces or shell metacharacters survive the trip.
+function run_in_target()
+{
+	if [[ "${ENVIRONMENT}" == local* ]]; then
+		"$@"
+		return
+	fi
+
+	local QUOTED="" ARG
+	for ARG in "$@"; do
+		QUOTED+=" $(printf '%q' "${ARG}")"
+	done
+	gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" "${QUOTED# }"
+}
+
+# compose_in_target ENV_FILE SUBCMD [ARG...]
+#
+# Convenience wrapper: docker compose --env-file ENV_FILE SUBCMD ARGS… via
+# run_in_target.
+function compose_in_target()
+{
+	run_in_target docker compose --env-file "${1}" "${@:2}"
+}
+
 function gpd()
 {
 	if [[ "${ENVIRONMENT}" == local* ]]; then
@@ -63,10 +92,9 @@ function gpd()
 
 		if ! "${CMD[@]}" 2>/dev/null; then
 			echo "[GPD][ERROR] transfer from local:${SRC_FILE} to ${DST}:${DST_FILE} failed"
-			exit 1
-		else
-			echo "[GPD][PUSH] successfully transfered from local:${SRC_FILE} to ${DST}:${DST_FILE}"
+			return 1
 		fi
+		echo "[GPD][PUSH] successfully transfered from local:${SRC_FILE} to ${DST}:${DST_FILE}"
 	elif [ "${MODE}" == "diffenv" ]; then
 		shift 1
 		local SRC_FILE=${1}

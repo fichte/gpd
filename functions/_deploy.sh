@@ -14,9 +14,8 @@ function deploy_init()
 	done < "${SCRIPT_DIR}"/../docker/variables/deployments
 
 	DEPLOY_SERVICE_LEN=$(( "${#DEPLOY_SERVICE[@]}" ))
-	DEPLOY_SERVICE_REMOTE=$(echo "${DEPLOY_SERVICE[@]}")
 
-	echo "[GPD][DEPLOY] starting deployment of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[@]}"
+	echo "[GPD][DEPLOY] starting deployment of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[*]}"
 	gpd init
 
 	if [ -f "${SCRIPT_DIR}"/../docker/variables/side ]; then
@@ -25,30 +24,19 @@ function deploy_init()
 			DEPLOY_SIDE_STACK+=("${LINE}")
 		done < "${SCRIPT_DIR}"/../docker/variables/side
 
-		DEPLOY_SIDE_STACK_LEN=$(( "${#DEPLOY_SIDE_STACK[@]}" - 1 ))
-
 		DEPLOY_SIDE_STACK_FINAL=()
 
-		for i in `seq 0 "${DEPLOY_SIDE_STACK_LEN}"`; do
-			SIDE_STACK_DIR="${BASEDIR}"/../"${DEPLOY_SIDE_STACK[$i]}"
-			if [[ "${ENVIRONMENT}" == local* ]]; then
-				if [ ! -f "${SIDE_STACK_DIR}"/"${ENVIRONMENT}"/.env ]; then
-					echo "[GPD][DEPLOY][WARNING] side stack: ${DEPLOY_SIDE_STACK[$i]} defined but not deployed"
-				else
-					echo "[GPD][DEPLOY][INFO] include side stack: ${DEPLOY_SIDE_STACK[$i]}"
-					DEPLOY_SIDE_STACK_FINAL+=("${DEPLOY_SIDE_STACK[$i]}")
-				fi
+		local SIDE_STACK SIDE_STACK_DIR SIDE_ENV_FILE
+		for SIDE_STACK in "${DEPLOY_SIDE_STACK[@]}"; do
+			SIDE_STACK_DIR="${BASEDIR}"/../"${SIDE_STACK}"
+			SIDE_ENV_FILE="${SIDE_STACK_DIR}"/"${ENVIRONMENT}"/.env
+			if run_in_target test -f "${SIDE_ENV_FILE}"; then
+				echo "[GPD][DEPLOY][INFO] include side stack: ${SIDE_STACK}"
+				DEPLOY_SIDE_STACK_FINAL+=("${SIDE_STACK}")
 			else
-				if ! $(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'test -f '"${SIDE_STACK_DIR}"'/'"${ENVIRONMENT}"'/.env'); then
-					echo "[GPD][DEPLOY][WARNING] side stack: ${DEPLOY_SIDE_STACK[$i]} defined but not deployed"
-				else
-					echo "[GPD][DEPLOY][INFO] include side stack: ${DEPLOY_SIDE_STACK[$i]}"
-					DEPLOY_SIDE_STACK_FINAL+=("${DEPLOY_SIDE_STACK[$i]}")
-				fi
+				echo "[GPD][DEPLOY][WARNING] side stack: ${SIDE_STACK} defined but not deployed"
 			fi
 		done
-
-		DEPLOY_SIDE_STACK_FINAL_LEN=$(( "${#DEPLOY_SIDE_STACK_FINAL[@]}" - 1 ))
 	fi
 }
 
@@ -63,13 +51,15 @@ function deploy_check_initial()
 function deploy_check_running()
 {
 	if [ "${DEPLOY_FORCE}" == "true" ]; then
-		echo "[GPD][DEPLOY][WARNING] ignore check running of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[@]}"
+		echo "[GPD][DEPLOY][WARNING] ignore check running of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[*]}"
 		return 0
-	elif [[ "${ENVIRONMENT}" == local* ]] && [ ! $(docker compose --env-file "${DEPLOY_STACK_ENV_FILE}" ps --services --status running -q "${DEPLOY_SERVICE[@]}" | wc -l) -eq "${DEPLOY_SERVICE_LEN}" ]; then
-		echo "[GPD][DEPLOY][ERROR] not all services are running, preventing deployment of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[@]}"
-		return 1
-	elif [[ "${ENVIRONMENT}" != local* ]] && [ ! $(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker compose --env-file '"${DEPLOY_STACK_ENV_FILE}"' ps --services --status running -q '"${DEPLOY_SERVICE_REMOTE}"' | wc -l') -eq "${DEPLOY_SERVICE_LEN}" ]; then
-		echo "[GPD][DEPLOY][ERROR] not all services are running, preventing deployment of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[@]}"
+	fi
+
+	local RUNNING_COUNT
+	RUNNING_COUNT=$(compose_in_target "${DEPLOY_STACK_ENV_FILE}" ps --services --status running -q "${DEPLOY_SERVICE[@]}" | wc -l | tr -d '[:space:]')
+
+	if [ "${RUNNING_COUNT}" -ne "${DEPLOY_SERVICE_LEN}" ]; then
+		echo "[GPD][DEPLOY][ERROR] not all services are running, preventing deployment of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[*]}"
 		return 1
 	fi
 
@@ -93,79 +83,89 @@ function deploy_login_to_registry()
 		exit 1
 	fi
 
-	if [[ "${ENVIRONMENT}" == local* ]] && [[ "${CI_REGISTRY}" == "null" ]] && [[ "${CI_REGISTRY_USER}" == "null" ]] && [[ "${CI_REGISTRY_USER}" == "null" ]]; then
+	if [[ "${CI_REGISTRY}" == "null" && "${CI_REGISTRY_USER}" == "null" && "${CI_REGISTRY_PASSWORD}" == "null" ]]; then
 		echo "[GPD][DEPLOY] no registry defined, assuming all images in public registries"
-		return 0
-	elif [[ "${ENVIRONMENT}" == local* ]] && ! $(docker login -u "${CI_REGISTRY_USER}" -p "${CI_REGISTRY_PASSWORD}" "${CI_REGISTRY}" &>/dev/null); then
-		echo "[GPD][DEPLOY][ERROR] login to registry failed"
-		return 1
-	elif [[ "${ENVIRONMENT}" != local* ]] && [[ "${CI_REGISTRY}" == "null" ]] && [[ "${CI_REGISTRY_USER}" == "null" ]] && [[ "${CI_REGISTRY_USER}" == "null" ]]; then
-		echo "[GPD][DEPLOY] no registry defined, assuming all images in public registries"
-		return 0
-	elif [[ "${ENVIRONMENT}" != local* ]] && ! gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker login -u '"${CI_REGISTRY_USER}"' -p '"${CI_REGISTRY_PASSWORD}"' '"${CI_REGISTRY}"' &>/dev/null'; then
-		echo "[GPD][DEPLOY][ERROR] login to registry failed"
-		return 1
-	else
-		echo "[GPD][DEPLOY] login to registry successful"
 		return 0
 	fi
 
+	if ! gpd_retry "${RETRIES}" gpd_silent run_in_target docker login -u "${CI_REGISTRY_USER}" -p "${CI_REGISTRY_PASSWORD}" "${CI_REGISTRY}"; then
+		echo "[GPD][DEPLOY][ERROR] login to registry failed after ${RETRIES} attempts"
+		return 1
+	fi
+
+	echo "[GPD][DEPLOY] login to registry successful"
+	return 0
 }
 
 function deploy_pull_images()
 {
-	if [[ "${ENVIRONMENT}" == local* ]] && ! $(docker compose --env-file "${DEPLOY_STACK_ENV_FILE}" pull -q "${DEPLOY_SERVICE[@]}" &>/dev/null); then
-		echo "[GPD][DEPLOY][ERROR] pulling images failed"
+	if ! gpd_retry "${RETRIES}" gpd_silent compose_in_target "${DEPLOY_STACK_ENV_FILE}" pull -q "${DEPLOY_SERVICE[@]}"; then
+		echo "[GPD][DEPLOY][ERROR] pulling images failed after ${RETRIES} attempts"
 		return 1
-	elif [[ "${ENVIRONMENT}" != local* ]] && ! $(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker compose --env-file '"${DEPLOY_STACK_ENV_FILE}"' pull -q '"${DEPLOY_SERVICE_REMOTE}"' &>/dev/null'); then
-		echo "[GPD][DEPLOY][ERROR] pulling images failed"
-		return 1
-	else
-		echo "[GPD][DEPLOY] pulling images successful"
-		return 0
 	fi
+
+	echo "[GPD][DEPLOY] pulling images successful"
+	return 0
 }
+
+# Strings that mean "this dry-run failure is the user's fault, not the
+# network's". When we see one of these in stderr, fail fast instead of
+# burning retries.
+DEPLOY_DRY_RUN_FATAL_PATTERNS='access denied|repository does not exist|manifest unknown|unauthorized|not found:|pull access denied|invalid reference format|service ".*" depends on undefined service'
 
 function deploy_dry_run()
 {
-	MAX_RETRIES=5
-	RETRY_COUNT=0
+	local MAX_RETRIES=3
+	local STDERR_LOG
+	STDERR_LOG=$(mktemp)
+	local ATTEMPT SLEEP_FOR
 
-	while [ "${RETRY_COUNT}" -lt "${MAX_RETRIES}" ]; do
-		if [[ "${ENVIRONMENT}" == local* ]]; then
-			docker compose --env-file "${DEPLOY_STACK_ENV_FILE}" up --detach --dry-run --force-recreate --no-color "${DEPLOY_SERVICE[@]}" &>/dev/null && break
-		else
-			gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker compose --env-file '"${DEPLOY_STACK_ENV_FILE}"' up --detach --dry-run --force-recreate --no-color '"${DEPLOY_SERVICE_REMOTE}"' &>/dev/null' && break
+	for ATTEMPT in $(seq 1 "${MAX_RETRIES}"); do
+		if compose_in_target "${DEPLOY_STACK_ENV_FILE}" up --detach --dry-run --force-recreate --no-color "${DEPLOY_SERVICE[@]}" >/dev/null 2>"${STDERR_LOG}"; then
+			rm -f "${STDERR_LOG}"
+			echo "[GPD][DEPLOY] dry run successful, continuing deployment of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[*]}"
+			return 0
 		fi
-		RETRY_COUNT=$((RETRY_COUNT+1))
-		sleep 1
-		echo "[GPD][DEPLOY][WARNING] docker compose --dry-run try ${RETRY_COUNT} failed, it usualy succeeds within 5 retries"
+
+		if grep -Eqi "${DEPLOY_DRY_RUN_FATAL_PATTERNS}" "${STDERR_LOG}"; then
+			echo "[GPD][DEPLOY][ERROR] dry run failed with non-transient error:" >&2
+			cat "${STDERR_LOG}" >&2
+			rm -f "${STDERR_LOG}"
+			[ "${DEPLOY_FORCE}" == "true" ] && {
+				echo "[GPD][DEPLOY][WARNING] force flag set, ignoring fatal dry-run error"
+				return 0
+			}
+			return 1
+		fi
+
+		if [ "${ATTEMPT}" -lt "${MAX_RETRIES}" ]; then
+			SLEEP_FOR=$(( 1 << (ATTEMPT - 1) ))
+			echo "[GPD][DEPLOY][WARNING] dry run attempt ${ATTEMPT}/${MAX_RETRIES} failed (transient), retrying in ${SLEEP_FOR}s"
+			sleep "${SLEEP_FOR}"
+		fi
 	done
 
 	if [ "${DEPLOY_FORCE}" == "true" ]; then
-		echo "[GPD][DEPLOY][WARNING] ignore dry run of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[@]}"
-		return 0
-	elif [ "${RETRY_COUNT}" -eq "${MAX_RETRIES}" ]; then
-		echo "[GPD][DEPLOY][ERROR] dry run failed after ${MAX_RETRIES} retries"
-		return 1
-	else
-		echo "[GPD][DEPLOY] dry run successful, continuing deployment of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[@]}"
+		echo "[GPD][DEPLOY][WARNING] ignore dry run of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[*]}"
+		rm -f "${STDERR_LOG}"
 		return 0
 	fi
+
+	echo "[GPD][DEPLOY][ERROR] dry run failed after ${MAX_RETRIES} retries:" >&2
+	cat "${STDERR_LOG}" >&2
+	rm -f "${STDERR_LOG}"
+	return 1
 }
 
 function deploy_on_target()
 {
-	if [[ "${ENVIRONMENT}" == local* ]] && ! $(docker compose --env-file "${DEPLOY_STACK_ENV_FILE}" up --detach --force-recreate --no-color "${DEPLOY_SERVICE[@]}" &>/dev/null); then
-		echo "[GPD][DEPLOY][ERROR] deployment of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[@]} failed"
+	if ! compose_in_target "${DEPLOY_STACK_ENV_FILE}" up --detach --force-recreate --no-color "${DEPLOY_SERVICE[@]}" >/dev/null 2>&1; then
+		echo "[GPD][DEPLOY][ERROR] deployment of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[*]} failed"
 		return 1
-	elif [[ "${ENVIRONMENT}" != local* ]] && [ $(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker compose --env-file '"${DEPLOY_STACK_ENV_FILE}"' up --detach --force-recreate --no-color '"${DEPLOY_SERVICE_REMOTE}"' &>/dev/null') ]; then
-		echo "[GPD][DEPLOY][ERROR] deployment of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[@]} failed"
-		return 1
-	else
-		echo "[GPD][DEPLOY] deployment of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[@]} successful"
-		return 0
 	fi
+
+	echo "[GPD][DEPLOY] deployment of ${DEPLOY_TYPE}: ${DEPLOY_SERVICE[*]} successful"
+	return 0
 }
 
 function deploy_logout_from_registry()
@@ -175,17 +175,17 @@ function deploy_logout_from_registry()
 		exit 1
 	fi
 
-	if [[ "${ENVIRONMENT}" == local* ]] && ! $(docker logout "${CI_REGISTRY}" &>/dev/null); then
-		echo "[GPD][DEPLOY][ERROR] logout from registry failed"
-		return 1
-	elif [[ "${ENVIRONMENT}" != local* ]] && ! gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker logout '"${CI_REGISTRY}"' &>/dev/null'; then
-		echo "[GPD][DEPLOY][ERROR] logout from registry failed"
-		return 1
-	else
-		echo "[GPD][DEPLOY] logout from registry successful"
+	if [[ "${CI_REGISTRY}" == "null" ]]; then
 		return 0
 	fi
 
+	if ! run_in_target docker logout "${CI_REGISTRY}" >/dev/null 2>&1; then
+		echo "[GPD][DEPLOY][ERROR] logout from registry failed"
+		return 1
+	fi
+
+	echo "[GPD][DEPLOY] logout from registry successful"
+	return 0
 }
 
 function deploy_check_main()
@@ -193,76 +193,52 @@ function deploy_check_main()
 	read -r DEPLOY_MAIN_STACK < "${SCRIPT_DIR}"/../docker/variables/main
 	DEPLOY_MAIN_STACK_ENV_FILE="${BASEDIR}"/../"${DEPLOY_MAIN_STACK}"/"${ENVIRONMENT}"/.env
 
-	if [[ "${ENVIRONMENT}" == local* ]]; then
-		if [ ! -f "${DEPLOY_MAIN_STACK_ENV_FILE}" ]; then
-			echo "[GPD][DEPLOY][ERROR] main stack: ${DEPLOY_MAIN_STACK} not deployed"
-			return 1
-		fi
-
-		if [ ! $(docker compose --env-file "${DEPLOY_MAIN_STACK_ENV_FILE}" ps -a -q --status=running | wc -l) -eq $(docker compose --env-file "${DEPLOY_MAIN_STACK_ENV_FILE}" config --services | wc -l) ]; then
-			echo "[GPD][DEPLOY][ERROR] not all services of main stack: ${DEPLOY_MAIN_STACK} are running"
-			return 1
-		else
-			echo "[GPD][DEPLOY][INFO] all services of main stack: ${DEPLOY_MAIN_STACK} are running, continuing deployment"
-		fi
-		return 0
-	else
-		if ! $(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'test -f '"${DEPLOY_MAIN_STACK_ENV_FILE}"''); then
-			echo "[GPD][DEPLOY][ERROR] main stack: ${DEPLOY_MAIN_STACK} not deployed"
-			return 1
-		fi
-
-		if [ ! $(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker compose --env-file '"${DEPLOY_MAIN_STACK_ENV_FILE}"' ps -a -q --status=running | wc -l') -eq $(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker compose --env-file '"${DEPLOY_MAIN_STACK_ENV_FILE}"' config --services | wc -l') ]; then
-			echo "[GPD][DEPLOY][ERROR] not all services of main stack: ${DEPLOY_MAIN_STACK} are running"
-			return 1
-		else
-			echo "[GPD][DEPLOY][INFO] all services of main stack: ${DEPLOY_MAIN_STACK} are running, continuing deployment"
-		fi
-		return 0
+	if ! run_in_target test -f "${DEPLOY_MAIN_STACK_ENV_FILE}"; then
+		echo "[GPD][DEPLOY][ERROR] main stack: ${DEPLOY_MAIN_STACK} not deployed"
+		return 1
 	fi
+
+	local RUNNING_COUNT TOTAL_COUNT
+	RUNNING_COUNT=$(compose_in_target "${DEPLOY_MAIN_STACK_ENV_FILE}" ps -a -q --status=running | wc -l | tr -d '[:space:]')
+	TOTAL_COUNT=$(compose_in_target "${DEPLOY_MAIN_STACK_ENV_FILE}" config --services | wc -l | tr -d '[:space:]')
+
+	if [ "${RUNNING_COUNT}" -ne "${TOTAL_COUNT}" ]; then
+		echo "[GPD][DEPLOY][ERROR] not all services of main stack: ${DEPLOY_MAIN_STACK} are running"
+		return 1
+	fi
+
+	echo "[GPD][DEPLOY][INFO] all services of main stack: ${DEPLOY_MAIN_STACK} are running, continuing deployment"
+	return 0
 }
 
 function deploy_side_down()
 {
-	for i in `seq 0 "${DEPLOY_SIDE_STACK_FINAL_LEN}"`; do
-		DEPLOY_SIDE_STACK_ENV_FILE="${BASEDIR}"/../"${DEPLOY_SIDE_STACK_FINAL[$i]}"/"${ENVIRONMENT}"/.env
-		if [[ "${ENVIRONMENT}" == local* ]]; then
-			if [ $(docker compose --env-file "${DEPLOY_SIDE_STACK_ENV_FILE}" ps -a -q --status=running | wc -l) -eq 0 ]; then
-				echo "[GPD][DEPLOY] side stack: ${DEPLOY_SIDE_STACK_FINAL[$i]} already stopped"
-			else
-				echo "[GPD][DEPLOY] stop side stack: ${DEPLOY_SIDE_STACK_FINAL[$i]}"
-				docker compose --env-file "${DEPLOY_SIDE_STACK_ENV_FILE}" down &>/dev/null
-			fi
+	local SIDE_STACK SIDE_ENV_FILE RUNNING_COUNT
+	for SIDE_STACK in "${DEPLOY_SIDE_STACK_FINAL[@]}"; do
+		SIDE_ENV_FILE="${BASEDIR}"/../"${SIDE_STACK}"/"${ENVIRONMENT}"/.env
+		RUNNING_COUNT=$(compose_in_target "${SIDE_ENV_FILE}" ps -a -q --status=running | wc -l | tr -d '[:space:]')
+
+		if [ "${RUNNING_COUNT}" -eq 0 ]; then
+			echo "[GPD][DEPLOY] side stack: ${SIDE_STACK} already stopped"
 		else
-			if [ $(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker compose --env-file '"${DEPLOY_SIDE_STACK_ENV_FILE}"' ps -a -q --status=running | wc -l') -eq 0 ]; then
-				echo "[GPD][DEPLOY] side stack: ${DEPLOY_SIDE_STACK_FINAL[$i]} already stopped"
-			else
-				echo "[GPD][DEPLOY] stop side stack: ${DEPLOY_SIDE_STACK_FINAL[$i]}"
-				gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker compose --env-file '"${DEPLOY_SIDE_STACK_ENV_FILE}"' down &>/dev/null'
-			fi
+			echo "[GPD][DEPLOY] stop side stack: ${SIDE_STACK}"
+			compose_in_target "${SIDE_ENV_FILE}" down >/dev/null 2>&1
 		fi
 	done
 }
 
 function deploy_side_up()
 {
-	for i in `seq 0 "${DEPLOY_SIDE_STACK_FINAL_LEN}"`; do
-		DEPLOY_SIDE_STACK_ENV_FILE="${BASEDIR}"/../"${DEPLOY_SIDE_STACK_FINAL[$i]}"/"${ENVIRONMENT}"/.env
-		if [[ "${ENVIRONMENT}" == local* ]]; then
-			if ! $(docker compose --env-file "${DEPLOY_SIDE_STACK_ENV_FILE}" up -d &>/dev/null); then
-				echo "[GPD][DEPLOY][ERROR] deploy side stack: ${DEPLOY_SIDE_STACK_FINAL[$i]} failed"
-				return 1
-			else
-				echo "[GPD][DEPLOY] deployment of side stack: ${DEPLOY_SIDE_STACK_FINAL[$i]} successful"
-			fi
-		else
-			if ! $(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker compose --env-file '"${DEPLOY_SIDE_STACK_ENV_FILE}"' up -d &>/dev/null'); then
-				echo "[GPD][DEPLOY][ERROR] deploy side stack: ${DEPLOY_SIDE_STACK_FINAL[$i]} failed"
-				return 1
-			else
-				echo "[GPD][DEPLOY] deployment of side stack: ${DEPLOY_SIDE_STACK_FINAL[$i]} successful"
-			fi
+	local SIDE_STACK SIDE_ENV_FILE
+	for SIDE_STACK in "${DEPLOY_SIDE_STACK_FINAL[@]}"; do
+		SIDE_ENV_FILE="${BASEDIR}"/../"${SIDE_STACK}"/"${ENVIRONMENT}"/.env
+
+		if ! compose_in_target "${SIDE_ENV_FILE}" up -d >/dev/null 2>&1; then
+			echo "[GPD][DEPLOY][ERROR] deploy side stack: ${SIDE_STACK} failed"
+			return 1
 		fi
+
+		echo "[GPD][DEPLOY] deployment of side stack: ${SIDE_STACK} successful"
 	done
 }
 
@@ -309,25 +285,23 @@ function deploy()
 		fi
 	fi
 
-	if [ -n "${DEPLOY_SIDE_STACK_FINAL_LEN}" ] && [ "${DEPLOY_SIDE_STACK_FINAL_LEN}" -ge 0 ]; then
+	# TODO: rollback on partial deploy failure (e.g. side_down succeeds, deploy_on_target fails).
+	# Today we proceed even if a side stack fails to come back up; the half-applied state stays.
+	if [ "${#DEPLOY_SIDE_STACK_FINAL[@]}" -gt 0 ]; then
 		deploy_side_down
-	else
-		if [ ! -f "${SCRIPT_DIR}"/../docker/variables/main ]; then
-			echo "[GPD][DEPLOY][INFO] not stopping any side stacks"
-		fi
+	elif [ ! -f "${SCRIPT_DIR}"/../docker/variables/main ]; then
+		echo "[GPD][DEPLOY][INFO] not stopping any side stacks"
 	fi
 
 	if ! deploy_on_target; then
 		exit 1
 	fi
 
-	if [ -n "${DEPLOY_SIDE_STACK_FINAL_LEN}" ] && [ "${DEPLOY_SIDE_STACK_FINAL_LEN}" -ge 0 ]; then
+	if [ "${#DEPLOY_SIDE_STACK_FINAL[@]}" -gt 0 ]; then
 		if ! deploy_side_up; then
 			exit 1
 		fi
-	else
-		if [ ! -f "${SCRIPT_DIR}"/../docker/variables/main ]; then
-			echo "[GPD][DEPLOY][INFO] not deploying any side stacks"
-		fi
+	elif [ ! -f "${SCRIPT_DIR}"/../docker/variables/main ]; then
+		echo "[GPD][DEPLOY][INFO] not deploying any side stacks"
 	fi
 }

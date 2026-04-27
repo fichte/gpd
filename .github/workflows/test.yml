@@ -1,0 +1,58 @@
+name: test
+
+on:
+  push:
+    branches: [main, agentic-update]
+  pull_request:
+
+jobs:
+  bats:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install dependencies (linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats apache2-utils zstd rsync
+
+      - name: install dependencies (macos)
+        if: runner.os == 'macOS'
+        run: |
+          brew install bash bats-core zstd gnu-getopt
+          # Three PATH adjustments for subsequent steps:
+          # - Homebrew bash 5.x ahead of /bin/bash 3.2 (gpd.sh requires Bash 4+).
+          # - gnu-getopt ahead of macOS's BSD getopt, which doesn't grok the
+          #   -l/--long-option syntax that _usage.sh relies on.
+          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix gnu-getopt)/bin" >> "$GITHUB_PATH"
+
+      - name: bash version
+        run: bash --version
+
+      - name: run bats
+        # Belt-and-braces: re-export PATH inside the step so `bash gpd/gpd.sh`
+        # subprocesses inside the bats tests inherit the homebrew bash and
+        # gnu-getopt. On Linux runners the lookup is already fine.
+        run: |
+          if [[ "${RUNNER_OS}" == "macOS" ]]; then
+            export PATH="$(brew --prefix)/bin:$(brew --prefix gnu-getopt)/bin:${PATH}"
+          fi
+          bats tests/bats/
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ludeeus/action-shellcheck@master
+        env:
+          SHELLCHECK_OPTS: -e SC2148 -e SC2034 -e SC1090 -e SC1091
+        with:
+          severity: error
+          scandir: '.'
+          ignore_paths: tests/fixtures

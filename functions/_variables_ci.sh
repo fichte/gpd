@@ -73,12 +73,10 @@ function variables_ci_replace()
 	fi
 
 	## replace with values from gitlabci default exported variables
-	for c in `seq 0 "${STACK_CI_VARIABLES_LEN}"`; do
-		STACK_CI_VARIABLES_VAR=$(echo "${STACK_CI_VARIABLES[$c]}")
-		STACK_CI_VARIABLES_REPLACE_VAR=$(echo "${STACK_CI_VARIABLES[$c]}")
-		echo "[GPD][GENERATE] replacing ci variable ${STACK_CI_VARIABLES_REPLACE_VAR}"
-		echo "${STACK_CI_VARIABLES_VAR}=__${STACK_CI_VARIABLES_VAR}__" >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack.env
-		sed -i 's;__'${STACK_CI_VARIABLES[$c]}'__;'"${!STACK_CI_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/*
-		sed -i 's;__'${STACK_CI_VARIABLES[$c]}'__;'"${!STACK_CI_VARIABLES_REPLACE_VAR}"';g' "${STACK_FINAL_CONFIG_DIR}"/config/*
+	local KEY
+	for KEY in "${STACK_CI_VARIABLES[@]}"; do
+		echo "[GPD][GENERATE] replacing ci variable ${KEY}"
+		echo "${KEY}=__${KEY}__" >>"${STACK_FINAL_CONFIG_DIR}"/compose/stack.env
+		safe_replace_token "${KEY}" "${!KEY}" "${STACK_FINAL_CONFIG_DIR}"/compose/* "${STACK_FINAL_CONFIG_DIR}"/config/*
 	done
 }

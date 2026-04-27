@@ -1,45 +1,52 @@
 function generate_admin_password()
 {
 	echo "[GPD][GENERATE] generating stack admin management password"
-	STACK_ADMIN_MANAGEMENT_PASSWORD=$(echo "${ENVIRONMENT^^}"_STACK_ADMIN_MANAGEMENT_PASSWORD)
+	local ADMIN_PASSWORD_VAR="${ENVIRONMENT^^}_STACK_ADMIN_MANAGEMENT_PASSWORD"
+	local ADMIN_PASSWORD="${!ADMIN_PASSWORD_VAR}"
 
-	if htpasswd -b -c "${STACK_FINAL_CONFIG_DIR}"/config/nginx_nginxpasswd admin ${!STACK_ADMIN_MANAGEMENT_PASSWORD} 2>/dev/null; then
-		WUD_PASSWORD=$(htpasswd -nib admin ${!STACK_ADMIN_MANAGEMENT_PASSWORD} | cut -d ":" -f 2 | sed -e 's;\$;\$\$;g')
-		PORTAINER_PASSWORD=$(htpasswd -nbB admin ${!STACK_ADMIN_MANAGEMENT_PASSWORD} | cut -d ":" -f 2 | sed -e 's;\$;\$\$;g')
-		STACK_ADMIN_PASSWORD=$(htpasswd -bnBC 8 "" ${!STACK_ADMIN_MANAGEMENT_PASSWORD} | tr -d ':\n')
-		STACK_ADMIN_10_PASSWORD=$(htpasswd -bnBC 10 "" ${!STACK_ADMIN_MANAGEMENT_PASSWORD} | tr -d ':\n')
-
-		sed -i 's;__WUD_PASSWORD__;'"${WUD_PASSWORD}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/*
-		sed -i 's;__PORTAINER_PASSWORD__;'"${PORTAINER_PASSWORD}"';g' "${STACK_FINAL_CONFIG_DIR}"/compose/*
-		sed -i 's;__STACK_ADMIN_PASSWORD__;'"${STACK_ADMIN_PASSWORD}"';g' "${STACK_FINAL_CONFIG_DIR}"/config/*
-		sed -i 's;__STACK_ADMIN_10_PASSWORD__;'"${STACK_ADMIN_10_PASSWORD}"';g' "${STACK_FINAL_CONFIG_DIR}"/config/*
-		echo "[GPD][GENERATE] generating stack admin management password successful"
-		return 0
-	else
-		echo "[GPD][GENERATE]][ERROR] generating stack admin management password failed"
+	if ! gpd_htpasswd_create "${STACK_FINAL_CONFIG_DIR}"/config/nginx_nginxpasswd admin "${ADMIN_PASSWORD}"; then
+		echo "[GPD][GENERATE][ERROR] generating stack admin management password failed"
 		return 1
 	fi
+
+	## passwords destined for compose files double every $ so docker-compose
+	## does not treat them as variable references
+	local WUD_PASSWORD PORTAINER_PASSWORD STACK_ADMIN_PASSWORD STACK_ADMIN_10_PASSWORD
+	WUD_PASSWORD=$(gpd_apr1_hash "${ADMIN_PASSWORD}") || return 1
+	WUD_PASSWORD="${WUD_PASSWORD//\$/\$\$}"
+	PORTAINER_PASSWORD=$(gpd_bcrypt_hash 5 "${ADMIN_PASSWORD}") || return 1
+	PORTAINER_PASSWORD="${PORTAINER_PASSWORD//\$/\$\$}"
+	STACK_ADMIN_PASSWORD=$(gpd_bcrypt_hash 8 "${ADMIN_PASSWORD}") || return 1
+	STACK_ADMIN_10_PASSWORD=$(gpd_bcrypt_hash 10 "${ADMIN_PASSWORD}") || return 1
+
+	safe_replace_token "WUD_PASSWORD" "${WUD_PASSWORD}" "${STACK_FINAL_CONFIG_DIR}"/compose/*
+	safe_replace_token "PORTAINER_PASSWORD" "${PORTAINER_PASSWORD}" "${STACK_FINAL_CONFIG_DIR}"/compose/*
+	safe_replace_token "STACK_ADMIN_PASSWORD" "${STACK_ADMIN_PASSWORD}" "${STACK_FINAL_CONFIG_DIR}"/config/*
+	safe_replace_token "STACK_ADMIN_10_PASSWORD" "${STACK_ADMIN_10_PASSWORD}" "${STACK_FINAL_CONFIG_DIR}"/config/*
+	echo "[GPD][GENERATE] generating stack admin management password successful"
+	return 0
 }
 
 function generate_opensearch_passwords()
 {
 	echo "[GPD][GENERATE] generating opensearch passwords"
 
-	OPENSEARCH_USERS=()
+	local OPENSEARCH_USERS=()
+	local LINE OPENSEARCH_USER
 
 	while IFS= read -r LINE; do
 		if [[ "${LINE}" == *OPENSEARCH*PASSWORD* ]]; then
 			OPENSEARCH_USER="${LINE#*OPENSEARCH_}"
 			OPENSEARCH_USER="${OPENSEARCH_USER%%_PASSWORD*}"
-			OPENSEARCH_USERS+=("$OPENSEARCH_USER")
+			OPENSEARCH_USERS+=("${OPENSEARCH_USER}")
 		fi
 	done < "${STACK_FINAL_CONFIG_DIR}"/compose/variables
 
-	for i in "${OPENSEARCH_USERS[@]}"; do
-		ENVIRONMENT_PASSWORD_VARIABLE="${ENVIRONMENT^^}"_STACK_OPENSEARCH_"${i}"_PASSWORD
-		PASSWORD_REPLACE_VALUE=__OPENSEARCH_"${i}"_PASSWORD__
-		HASHED_PASSWORD=$(htpasswd -bnBC 12 "" ${!ENVIRONMENT_PASSWORD_VARIABLE} | tr -d ':\n')
-		sed -i 's;'"${PASSWORD_REPLACE_VALUE}"';'"${HASHED_PASSWORD}"';g' "${STACK_FINAL_CONFIG_DIR}"/config/*
+	local USER ENV_PASSWORD_VAR HASHED_PASSWORD
+	for USER in "${OPENSEARCH_USERS[@]}"; do
+		ENV_PASSWORD_VAR="${ENVIRONMENT^^}_STACK_OPENSEARCH_${USER}_PASSWORD"
+		HASHED_PASSWORD=$(gpd_bcrypt_hash 12 "${!ENV_PASSWORD_VAR}") || return 1
+		safe_replace_token "OPENSEARCH_${USER}_PASSWORD" "${HASHED_PASSWORD}" "${STACK_FINAL_CONFIG_DIR}"/config/*
 	done
 
 	echo "[GPD][GENERATE] generating opensearch passwords successful"

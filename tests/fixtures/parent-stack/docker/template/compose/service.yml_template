@@ -1,0 +1,16 @@
+services:
+  service:
+    image: alpine:latest
+    environment:
+      - GREETING=__STACK_GREETING__
+      - GNARLY=__STACK_GNARLY_VALUE__
+      - ENV=__STACK_ENV__
+      - REGISTRY=__CI_REGISTRY__
+    networks:
+      - test
+    volumes:
+      - __STACK_DATA_PATH__/service:/data
+
+networks:
+  test:
+    name: __STACK_ENV_LOWER__-test

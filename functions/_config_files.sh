@@ -4,11 +4,10 @@ function copy_config_files()
 	pushd "${SCRIPT_DIR}"/../docker/template/asset &>/dev/null
 	for t in "${DEPLOY_SERVICE[@]}"; do
 		ASSET_FILES_TEMPLATES=("${t}"_*_template)
-		ASSET_FILES_TEMPLATES_LEN=$(( "${#ASSET_FILES_TEMPLATES[@]}" - 1 ))
 
-		for u in `seq 0 "${ASSET_FILES_TEMPLATES_LEN}"`; do
-			FINAL_CONFIG_FILE=$(echo "${ASSET_FILES_TEMPLATES[$u]}" | sed -e 's/_template//g')
-			cp "${SCRIPT_DIR}"/../docker/template/asset/"${ASSET_FILES_TEMPLATES[$u]}" "${STACK_FINAL_CONFIG_DIR}"/asset/"${FINAL_CONFIG_FILE}"
+		for ASSET_TEMPLATE in "${ASSET_FILES_TEMPLATES[@]}"; do
+			FINAL_CONFIG_FILE="${ASSET_TEMPLATE%_template}"
+			cp "${SCRIPT_DIR}"/../docker/template/asset/"${ASSET_TEMPLATE}" "${STACK_FINAL_CONFIG_DIR}"/asset/"${FINAL_CONFIG_FILE}"
 		done
 	done
 	popd &>/dev/null
@@ -88,11 +87,10 @@ function copy_config_files()
 	pushd "${SCRIPT_DIR}"/../docker/template/config &>/dev/null
 	for t in "${DEPLOY_SERVICE[@]}"; do
 		CONFIG_FILES_TEMPLATES=("${t}"_*_template)
-		CONFIG_FILES_TEMPLATES_LEN=$(( "${#CONFIG_FILES_TEMPLATES[@]}" - 1 ))
 
-		for u in `seq 0 "${CONFIG_FILES_TEMPLATES_LEN}"`; do
-			FINAL_CONFIG_FILE=$(echo "${CONFIG_FILES_TEMPLATES[$u]}" | sed -e 's/_template//g')
-			cp "${SCRIPT_DIR}"/../docker/template/config/"${CONFIG_FILES_TEMPLATES[$u]}" "${STACK_FINAL_CONFIG_DIR}"/config/"${FINAL_CONFIG_FILE}"
+		for CONFIG_TEMPLATE in "${CONFIG_FILES_TEMPLATES[@]}"; do
+			FINAL_CONFIG_FILE="${CONFIG_TEMPLATE%_template}"
+			cp "${SCRIPT_DIR}"/../docker/template/config/"${CONFIG_TEMPLATE}" "${STACK_FINAL_CONFIG_DIR}"/config/"${FINAL_CONFIG_FILE}"
 		done
 	done
 

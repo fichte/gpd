@@ -1,0 +1,7 @@
+x-base-env: &base-env
+  TZ: UTC
+
+services:
+  service:
+    environment:
+      <<: *base-env

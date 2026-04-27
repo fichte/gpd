@@ -14,7 +14,7 @@ function generate()
 		exit 1
 	fi
 
-	for i in diff find grep htpasswd perl rsync sha256sum sort ssh wget zstd
+	for i in diff find grep perl rsync sha256sum sort ssh zstd
 	do
 		if ! check_binary "${i}"; then
 			exit 1
