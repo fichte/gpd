@@ -13,115 +13,85 @@ function remove_unused_images()
 	fi
 
 	gpd init
-
 	DEPLOY_STACK_ENV_FILE="${BASEDIR}"/"${ENVIRONMENT}"/.env
 
-	if [[ "${ENVIRONMENT}" == local* ]] && [ $(docker image ls -q -f "dangling=true" | wc -l) -gt 0 ]; then
-			echo "[GPD][CLEAN] cleaning dangling images"
-			if ! docker image rm $(docker image ls -q -f "dangling=true") &>/dev/null; then
-				echo "[GPD][CLEAN][ERROR] cleaning dangling images failed"
-			else
-				echo "[GPD][CLEAN] cleaning dangling images successful"
-			fi
-	elif [[ "${ENVIRONMENT}" != local* ]] && [ $(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker image ls -q -f "dangling=true" | wc -l') -gt 0 ]; then
-			if ! gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker image rm $(docker image ls -q -f "dangling=true") &>/dev/null'; then
-				echo "[GPD][CLEAN][ERROR] cleaning dangling images failed"
-			else
-				echo "[GPD][CLEAN] cleaning dangling images successful"
-			fi
-	else
-			echo "[GPD][CLEAN] no dangling images"
-	fi
-
 	if [[ "${ENVIRONMENT}" == local* ]]; then
-		OUTPUT_COMPOSE=$(docker compose --env-file "${DEPLOY_STACK_ENV_FILE}" images | sed 1d)
-	else
-		OUTPUT_COMPOSE=$(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker compose --env-file '"${DEPLOY_STACK_ENV_FILE}"' images | sed 1d')
+		unset DOCKER_HOST
 	fi
 
-	IMAGE_COMPOSE=()
-	VERSION_COMPOSE=()
+	## prune dangling images
+	local DANGLING
+	DANGLING=$(run_in_target docker image ls -q -f "dangling=true")
+	if [ -n "${DANGLING}" ]; then
+		echo "[GPD][CLEAN] cleaning dangling images"
+		# shellcheck disable=SC2086
+		if run_in_target docker image rm ${DANGLING} >/dev/null 2>&1; then
+			echo "[GPD][CLEAN] cleaning dangling images successful"
+		else
+			echo "[GPD][CLEAN][ERROR] cleaning dangling images failed"
+		fi
+	else
+		echo "[GPD][CLEAN] no dangling images"
+	fi
 
+	## list compose-managed images, skipping the table header
+	local OUTPUT_COMPOSE
+	OUTPUT_COMPOSE=$(compose_in_target "${DEPLOY_STACK_ENV_FILE}" images | tail -n +2)
+
+	local IMAGE_COMPOSE=() VERSION_COMPOSE=() LINE
 	while IFS= read -r LINE; do
-		VALUE_IMAGE=$(echo "$LINE" | awk '{print $2}')
-		VALUE_VERSION=$(echo "$LINE" | awk '{print $3}')
+		[ -z "${LINE}" ] && continue
+		IMAGE_COMPOSE+=("$(awk '{print $2}' <<< "${LINE}")")
+		VERSION_COMPOSE+=("$(awk '{print $3}' <<< "${LINE}")")
+	done <<< "${OUTPUT_COMPOSE}"
 
-		IMAGE_COMPOSE+=("${VALUE_IMAGE}")
-		VERSION_COMPOSE+=("${VALUE_VERSION}")
-	done <<< "$OUTPUT_COMPOSE"
-
-	IMAGE_COMPOSE_LEN=$(( "${#IMAGE_COMPOSE[@]}" - 1 ))
-	VERSION_COMPOSE_LEN=$(( "${#VERSION_COMPOSE[@]}" - 1 ))
-
-	IMAGE_COMPOSE_DELETE=()
-
-	for i in `seq 0 "${IMAGE_COMPOSE_LEN}"`; do
+	## for each compose-managed image, find other-tagged copies on the host
+	## and queue them for removal
+	local IMAGE_DELETE_COMPOSE=()
+	local i OTHER_TAGS TAG
+	for (( i=0; i<${#IMAGE_COMPOSE[@]}; i++ )); do
 		echo "[GPD][INFO] keeping ${IMAGE_COMPOSE[$i]}:${VERSION_COMPOSE[$i]}"
-		if [[ "${ENVIRONMENT}" == local* ]]; then
-			IMAGE_LS_OUTPUT_COMPOSE=($(docker image ls --format '{{.Repository}}:{{.Tag}}' ${IMAGE_COMPOSE[$i]} | sed '/'"${VERSION_COMPOSE[$i]}"'/d'))
-		else
-			IMAGE_LS_OUTPUT_COMPOSE=($(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker image ls --format '{{.Repository}}:{{.Tag}}' '"${IMAGE_COMPOSE[$i]}"' | sed '/"${VERSION_COMPOSE[$i]}"/d''))
-		fi
-		IMAGE_DELETE_COMPOSE+=("${IMAGE_LS_OUTPUT_COMPOSE[@]}")
-	done
-
-	IMAGE_DELETE_COMPOSE=($(echo "${IMAGE_DELETE_COMPOSE[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
-
-	for delete in "${IMAGE_DELETE_COMPOSE[@]}"; do
-		echo "[GPD][CLEAN] removing unused image ${delete}"
-		if [[ "${ENVIRONMENT}" == local* ]]; then
-			docker image rm "${delete}" &>/dev/null
-		else
-			gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker image rm '"${delete}"' &>/dev/null'
+		OTHER_TAGS=$(run_in_target docker image ls --format '{{.Repository}}:{{.Tag}}' "${IMAGE_COMPOSE[$i]}" | grep -vF ":${VERSION_COMPOSE[$i]}" || true)
+		if [ -n "${OTHER_TAGS}" ]; then
+			while IFS= read -r TAG; do
+				[ -n "${TAG}" ] && IMAGE_DELETE_COMPOSE+=("${TAG}")
+			done <<< "${OTHER_TAGS}"
 		fi
 	done
 
-	if [ -z "${CI_REGISTRY}" ] || [ "$CI_REGISTRY" == "null" ] ; then
+	## dedupe and remove
+	if [ "${#IMAGE_DELETE_COMPOSE[@]}" -gt 0 ]; then
+		local UNIQUE_DELETE
+		UNIQUE_DELETE=$(printf '%s\n' "${IMAGE_DELETE_COMPOSE[@]}" | sort -u)
+		while IFS= read -r TAG; do
+			[ -z "${TAG}" ] && continue
+			echo "[GPD][CLEAN] removing unused image ${TAG}"
+			run_in_target docker image rm "${TAG}" >/dev/null 2>&1 || true
+		done <<< "${UNIQUE_DELETE}"
+	fi
+
+	## custom-built CI image cleanup — only when a custom registry is configured
+	if [ -z "${CI_REGISTRY}" ] || [ "${CI_REGISTRY}" == "null" ]; then
 		echo "[GPD][CLEAN] no custom built images"
-		exit 0
+		return 0
 	fi
 
-	if [[ "${ENVIRONMENT}" == local* ]]; then
-		OUTPUT_CLI_KEEP_VERSION=$(docker compose --env-file "${DEPLOY_STACK_ENV_FILE}" images | grep "${CI_REGISTRY}/${CI_PROJECT_PATH}/" | awk '{ print $3 }' | head -1)
-		OUTPUT_CLI=$(docker images | grep "${CI_REGISTRY}/${CI_PROJECT_PATH}/" | sed '/'"${OUTPUT_CLI_KEEP_VERSION}"'/d')
-	else
-		OUTPUT_CLI_KEEP_VERSION=$(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker compose --env-file '"${DEPLOY_STACK_ENV_FILE}"' images | grep "'"${CI_REGISTRY}"'/'"${CI_PROJECT_PATH}"'/" | awk '"'"'{ print $3 }'"'"' | head -1')
-		OUTPUT_CLI=$(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker images | grep "'"${CI_REGISTRY}"'/'"${CI_PROJECT_PATH}"'/" | sed '/"${OUTPUT_CLI_KEEP_VERSION}"/d'')
+	local KEEP_VERSION
+	KEEP_VERSION=$(compose_in_target "${DEPLOY_STACK_ENV_FILE}" images | grep -F "${CI_REGISTRY}/${CI_PROJECT_PATH}/" | awk '{print $3}' | head -1 || true)
+
+	if [ -z "${KEEP_VERSION}" ]; then
+		echo "[GPD][CLEAN] no compose-managed image from ${CI_REGISTRY}/${CI_PROJECT_PATH}/"
+		return 0
 	fi
 
-	IMAGE_CLI=()
-	VERSION_CLI=()
+	local OLD_BUILDS
+	OLD_BUILDS=$(run_in_target docker images --format '{{.Repository}}:{{.Tag}}' | grep -F "${CI_REGISTRY}/${CI_PROJECT_PATH}/" | grep -vF ":${KEEP_VERSION}" || true)
 
-	while IFS= read -r LINE; do
-		VALUE_IMAGE=$(echo "$LINE" | awk '{print $1}')
-		VALUE_VERSION=$(echo "$LINE" | awk '{print $2}')
-
-		IMAGE_CLI+=("${VALUE_IMAGE}")
-		VERSION_CLI+=("${VALUE_VERSION}")
-	done <<< "$OUTPUT_CLI"
-
-	IMAGE_CLI_LEN=$(( "${#IMAGE_CLI[@]}" - 1 ))
-	VERSION_CLI_LEN=$(( "${#VERSION_CLI[@]}" - 1 ))
-
-	IMAGE_CLI_DELETE=()
-
-	for i in `seq 0 "${IMAGE_CLI_LEN}"`; do
-		if [[ "${ENVIRONMENT}" == local* ]]; then
-			IMAGE_LS_OUTPUT_CLI=($(docker image ls --format '{{.Repository}}:{{.Tag}}' ${IMAGE_CLI[$i]}:"${VERSION_CLI[$i]}" ))
-		else
-			IMAGE_LS_OUTPUT_CLI=($(gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker image ls --format '{{.Repository}}:{{.Tag}}' '"${IMAGE_CLI[$i]}"':'"${VERSION_CLI[$i]}"''))
-		fi
-		IMAGE_DELETE_CLI+=("${IMAGE_LS_OUTPUT_CLI[@]}")
-	done
-
-	IMAGE_DELETE_CLI=($(echo "${IMAGE_DELETE_CLI[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
-
-	for delete in "${IMAGE_DELETE_CLI[@]}"; do
-		echo "[GPD][CLEAN] removing unused image ${delete}"
-		if [[ "${ENVIRONMENT}" == local* ]]; then
-			docker image rm "${delete}" &>/dev/null
-		else
-			gpd ssh "${!STACK_DEPLOY_USER}"@"${!STACK_DEPLOY_HOST}" 'docker image rm '"${delete}"' &>/dev/null'
-		fi
-	done
+	if [ -n "${OLD_BUILDS}" ]; then
+		while IFS= read -r TAG; do
+			[ -z "${TAG}" ] && continue
+			echo "[GPD][CLEAN] removing unused image ${TAG}"
+			run_in_target docker image rm "${TAG}" >/dev/null 2>&1 || true
+		done <<< "${OLD_BUILDS}"
+	fi
 }

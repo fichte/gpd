@@ -5,6 +5,14 @@ on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- `functions/_remove_unused_images.sh`: refactor onto `run_in_target` /
+  `compose_in_target`, replace BSD-incompatible `seq 0 N-1` loops with
+  array iteration, and drop the tangled-quoting `sed '/v/d'` pipelines
+  that were producing empty output over SSH on real remote hosts. Also
+  switches to `--format '{{.Repository}}:{{.Tag}}'` to avoid fragile
+  column parsing.
+
 ## [1.0.0] - 2026-04-27
 
 ### Added
