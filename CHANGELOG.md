@@ -5,6 +5,8 @@ on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-04-27
+
 ### Fixed
 - `functions/_remove_unused_images.sh`: refactor onto `run_in_target` /
   `compose_in_target`, replace BSD-incompatible `seq 0 N-1` loops with
@@ -71,5 +73,6 @@ on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   parsed but never read — login/logout already happen inline in
   `_deploy.sh`.
 
-[Unreleased]: https://github.com/fichte/gpd/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/fichte/gpd/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/fichte/gpd/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/fichte/gpd/releases/tag/v1.0.0
